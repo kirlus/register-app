@@ -64,22 +64,42 @@ pipeline {
             }
 		}
 
-        stage("Trivy Scan") {
-           steps {
-               script {
-	            sh ('docker run -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image kirlus/register-app-pipeline:latest --no-progress --scanners vuln  --exit-code 0 --severity HIGH,CRITICAL --format table')
-               }
-           }
-       }
+        stage("Cleanup Artifacts") {
+    steps {
+        script {
+            sh '''
+                # Remove old app images
+                docker rmi ${IMAGE_NAME}:${IMAGE_TAG} || true
+                docker rmi ${IMAGE_NAME}:latest || true
 
-		stage ('Cleanup Artifacts') {
-           steps {
-               script {
-                    sh "docker rmi ${IMAGE_NAME}:${IMAGE_TAG}"
-                    sh "docker rmi ${IMAGE_NAME}:latest"
-               }
-          }
-       }
+                # Remove dangling images and stopped containers
+                docker system prune -f
+
+                # Remove old trivy image to force fresh pull only when needed
+                docker rmi aquasec/trivy:latest || true
+            '''
+        }
+    }
+}
+
+stage("Trivy Scan") {
+    steps {
+        script {
+            sh '''
+                docker run --rm \
+                  -v /var/run/docker.sock:/var/run/docker.sock \
+                  -v $HOME/.cache/trivy:/root/.cache/trivy \
+                  aquasec/trivy image kirlus/register-app-pipeline:latest \
+                  --no-progress \
+                  --scanners vuln \
+                  --exit-code 0 \
+                  --severity HIGH,CRITICAL \
+                  --format table \
+                  --skip-java-db-update
+            '''
+        }
+    }
+}
 
 		stage("Trigger CD Pipeline") {
             steps {
