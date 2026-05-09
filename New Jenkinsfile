@@ -95,7 +95,8 @@ stage("Trivy Scan") {
                   --exit-code 0 \
                   --severity HIGH,CRITICAL \
                   --format table \
-                  --skip-java-db-update
+                  --vuln-type os,library \
+                  --ignore-unfixed
             '''
         }
     }
